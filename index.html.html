@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Financeiro DRE Completo</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- PDF Export Libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- SheetJS (xlsx) CDN for reading Excel files -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <!-- Google Fonts: Poppins -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Poppins', sans-serif;
+            background-color: #0a2342; /* Azul Marinho */
+        }
+        .card {
+            background-color: #1e3a5f; /* Azul Marinho mais claro */
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            padding: 1.5rem;
+            border: 1px solid #2c5282;
+            transition: all 0.3s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+        }
+        .step-card { max-width: 800px; margin: 2rem auto; background-color: white; }
+        .hidden { display: none; }
+        .loader { border: 4px solid #e2e8f0; border-top: 4px solid #f97316; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        .metric-card {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 1.25rem 1.5rem;
+        }
+        .metric-title { font-weight: 500; color: #a0aec0; }
+        .metric-value { font-size: 1.5rem; font-weight: 700; color: #f7fafc; }
+        .av-chip {
+            font-size: 0.875rem; font-weight: 600; padding: 0.25rem 0.75rem; border-radius: 9999px;
+            background-color: #0a2342; color: #a0aec0;
+        }
+        .indicator-card { text-align: center; }
+        .indicator-value { font-size: 1.5rem; md:font-size: 2rem; font-weight: 800; color: #f7fafc; margin-bottom: 0.25rem; }
+        .indicator-label { font-size: 0.75rem; md:font-size: 0.875rem; color: #a0aec0; text-transform: uppercase; letter-spacing: 0.05em;}
+        .alert-item { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; padding: 0.75rem 1rem; border-radius: 0.5rem; border-left-width: 4px; }
+        .alert-warning { background-color: #2d282e; border-color: #f6ad55; color: #f6ad55; }
+        .alert-success { background-color: #223b3c; border-color: #68d391; color: #68d391; }
+        .prose { line-height: 1.6; max-width: none; }
+        .prose h3 { margin-top: 1.25em; margin-bottom: 0.5em; font-size: 1.1em; font-weight: 700; color: #f7fafc; }
+        .prose ul { list-style-type: disc; margin-left: 1.5em; }
+        .prose p, .prose li { color: #cbd5e0; }
+        /* Modal Styles */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 50;
+        }
+        .modal-content {
+            background-color: #1e3a5f; padding: 2rem; border-radius: 1rem;
+            max-width: 600px; width: 90%; max-height: 80vh;
+            overflow-y: auto;
+            border: 1px solid #2c5282;
+        }
+    </style>
+     <script>
+        tailwind.config = {
+          theme: {
+            extend: {
+              colors: {
+                'navy': '#0a2342',
+                'navy-light': '#1e3a5f',
+                'brand-orange': '#f97316',
+                'brand-orange-dark': '#ea580c'
+              }
+            }
+          }
+        }
+      </script>
+</head>
+
+<body class="p-4 md:p-8">
+    <div id="app-container" class="max-w-7xl mx-auto">
+
+        <!-- ETAPA DE ENTRADA -->
+        <div id="step-start" class="card step-card text-center">
+            <h2 class="text-3xl font-bold text-navy mb-4">Dashboard de Análise Financeira</h2>
+            <p class="text-gray-600 mb-6">Como você deseja carregar os dados?</p>
+            <div class="flex flex-col sm:flex-row gap-4">
+                <button id="btn-use-sheets" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition-colors">Conectar com Google Sheets (Online)</button>
+                <button id="btn-use-upload" class="w-full bg-navy hover:bg-navy-light text-white font-bold py-3 px-4 rounded-lg transition-colors">Carregar Arquivo .xlsx (Offline)</button>
+            </div>
+        </div>
+
+        <div id="step-url" class="card step-card hidden text-center">
+            <h2 class="text-2xl font-bold text-navy mb-4">Conectar com Google Sheets</h2>
+            <p class="text-gray-600 mb-6">Para começar, cole o link da sua Planilha Google publicada na web.</p>
+            <div class="mb-4">
+                <input type="text" id="sheet-url-input" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-navy focus:border-navy block w-full p-2.5" placeholder="Cole o link da planilha aqui...">
+                <p class="text-xs text-gray-500 mt-2 text-left">**Como obter o link:** Na sua Planilha Google, vá em <strong>Arquivo > Compartilhar > Publicar na web</strong>. Selecione a aba correta e o formato <strong>CSV</strong>, clique em "Publicar" e copie o link gerado.</p>
+            </div>
+            <button id="btn-connect-sheet" class="w-full bg-navy hover:bg-navy-light text-white font-bold py-2 px-4 rounded-lg transition-colors">Conectar e Analisar</button>
+        </div>
+        
+        <div id="step-upload" class="card step-card hidden text-center">
+            <h2 class="text-2xl font-bold text-navy mb-4">Carregar Arquivo .xlsx</h2>
+            <p class="text-gray-600 mb-6">Selecione sua planilha DRE no formato .xlsx para começar.</p>
+            <input type="file" id="file-input" class="block w-full text-sm text-gray-500 file:mr-4 file:py-3 file:px-6 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-navy/10 file:text-navy hover:file:bg-navy/20 transition-colors" accept=".xlsx">
+        </div>
+        
+        <div id="step-sheet" class="card step-card hidden">
+            <h2 class="text-2xl font-bold text-navy mb-4">Seleção da Aba</h2>
+            <div class="mb-4">
+                <label for="sheet-select" class="block text-sm font-medium text-gray-700 mb-2">Selecione a aba com os dados da DRE:</label>
+                <select id="sheet-select" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-navy focus:border-navy block w-full p-2.5"></select>
+            </div>
+            <div class="mt-6 text-center">
+                 <button id="btn-confirm-sheet-no" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mr-4 transition-colors">Trocar Arquivo</button>
+                <button id="btn-confirm-sheet-yes" class="bg-navy hover:bg-navy-light text-white font-bold py-2 px-4 rounded-lg transition-colors">Confirmar</button>
+            </div>
+        </div>
+
+        <div id="step-gemini-consent" class="card step-card hidden text-center">
+            <h2 class="text-2xl font-bold text-navy mb-4">Ativar Recursos de Inteligência Artificial?</h2>
+            <p class="text-gray-600 mb-6">Ao ativar, você permite que o aplicativo use a API Gemini para funcionalidades como o Simulador de Cenários e a Análise Inteligente. Isso requer conexão com a internet.</p>
+            <div id="api-key-container" class="hidden my-4 text-left">
+                <label for="api-key-input" class="block text-sm font-medium text-gray-700 mb-2">Sua Chave de API do Google AI Studio:</label>
+                <input type="password" id="api-key-input" class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-navy focus:border-navy block w-full p-2.5" placeholder="Cole sua chave de API aqui...">
+                <p class="text-xs text-gray-500 mt-1">Sua chave é usada apenas nesta sessão e não é armazenada. Obtenha sua chave gratuita em <a href="https://aistudio.google.com/app/apikey" target="_blank" class="text-navy underline">aistudio.google.com</a>.<br><strong>Importante:</strong> Ao criar a chave, certifique-se de que ela não tenha restrições de website.</p>
+                 <button id="btn-save-key" class="mt-4 w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold py-2 px-4 rounded-lg transition-colors">Salvar e Continuar</button>
+            </div>
+            <div id="consent-buttons-container" class="mt-6 text-center">
+                <button id="btn-gemini-no" class="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-4 rounded-lg mr-4 transition-colors">Não, usar versão padrão</button>
+                <button id="btn-gemini-yes" class="bg-navy hover:bg-navy-light text-white font-bold py-2 px-4 rounded-lg transition-colors">Sim, ativar IA</button>
+            </div>
+        </div>
+
+        <!-- LOADER -->
+        <div id="loader" class="hidden fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex-col items-center z-50 bg-white/70 backdrop-blur-sm p-8 rounded-lg">
+            <div class="loader"></div>
+            <p class="text-navy mt-4 font-semibold">Processando...</p>
+        </div>
+
+        <!-- PAINEL FINAL -->
+        <div id="dashboard-view" class="hidden space-y-6">
+            <header class="flex flex-col lg:flex-row justify-between items-start gap-4">
+                <div class="flex items-center gap-4">
+                    <!-- Sua Logo -->
+                    <div class="text-center">
+                        <label for="your-logo-input" class="cursor-pointer block border-2 border-dashed border-gray-600 rounded-lg p-2 w-24 h-16 sm:w-32 sm:h-20 flex items-center justify-center hover:bg-navy transition-colors">
+                            <img id="your-logo-img" src="https://placehold.co/120x60/1e3a5f/a0aec0?text=Sua+Logo" class="max-h-full max-w-full object-contain">
+                        </label>
+                        <input type="file" id="your-logo-input" class="hidden" accept="image/*">
+                    </div>
+                     <!-- Logo do Cliente -->
+                    <div class="text-center">
+                        <label for="client-logo-input" class="cursor-pointer block border-2 border-dashed border-gray-600 rounded-lg p-2 w-24 h-16 sm:w-32 sm:h-20 flex items-center justify-center hover:bg-navy transition-colors">
+                            <img id="client-logo-img" src="https://placehold.co/120x60/1e3a5f/a0aec0?text=Logo+Cliente" class="max-h-full max-w-full object-contain">
+                        </label>
+                        <input type="file" id="client-logo-input" class="hidden" accept="image/*">
+                    </div>
+                </div>
+                <div class="flex-grow text-center md:text-left">
+                    <h1 class="text-2xl lg:text-3xl font-bold text-white">Dashboard Financeiro DRE</h1>
+                    <p id="file-name-display" class="text-sm text-gray-400 mt-1"></p>
+                </div>
+                <div class="w-full md:w-auto flex flex-col sm:flex-row gap-4">
+                    <div class="flex-grow">
+                        <label for="month-filter" class="text-sm font-medium text-gray-400">Meses:</label>
+                        <select id="month-filter" multiple class="bg-navy-light border border-gray-600 text-gray-200 text-sm rounded-lg focus:ring-brand-orange focus:border-brand-orange block w-full p-2.5 h-32"></select>
+                    </div>
+                    <div>
+                        <label class="text-sm font-medium text-gray-400">Visão dos Gráficos:</label>
+                        <div class="mt-2 flex rounded-md">
+                            <button id="view-monthly" class="px-4 py-2 border border-navy-light text-sm font-semibold rounded-l-md bg-navy-light text-white transition-colors">Mês a Mês</button>
+                            <button id="view-consolidated" class="px-4 py-2 border-t border-b border-r border-navy-light text-sm font-semibold rounded-r-md bg-navy text-gray-400 transition-colors">Consolidado</button>
+                        </div>
+                         <div class="mt-2 space-y-2">
+                             <div class="relative">
+                                 <label for="base-url-input" class="text-xs text-gray-400">Seu Link Base (Netlify):</label>
+                                 <input type="text" id="base-url-input" class="w-full text-xs bg-navy-light border border-gray-600 text-gray-200 rounded-md p-1 focus:ring-brand-orange focus:border-brand-orange" placeholder="Cole seu link do Netlify aqui...">
+                             </div>
+                             <button id="btn-generate-link" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0m-4.242 6.364a2 2 0 00-2.828-2.828l-3 3a2 2 0 102.828 2.828l3-3a2 2 0 000-2.828zM3.414 9.414a2 2 0 010-2.828l3-3a2 2 0 112.828 2.828L6.414 9.414a2 2 0 01-2.828 0z" clip-rule="evenodd" /></svg>
+                                 Gerar Link do Cliente
+                             </button>
+                             <button id="btn-save-pdf" class="w-full bg-gray-600 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 transition-colors">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                                Salvar PDF
+                            </button>
+                         </div>
+                    </div>
+                </div>
+            </header>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Coluna Esquerda -->
+                <div class="lg:col-span-2 space-y-6">
+                    <!-- Bloco 1 -->
+                    <div class="card p-0">
+                        <h2 class="text-xl font-bold text-white p-6 pb-2">Resultados Essenciais</h2>
+                        <div id="block1-metrics" class="divide-y divide-gray-700"></div>
+                    </div>
+                     <!-- Bloco Simulador Gemini -->
+                    <div class="card gemini-feature hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-white">✨ Simulador de Cenários</h2>
+                            <span class="text-xs font-medium text-gray-300 bg-navy/80 px-2 py-1 rounded-full">Powered by Gemini</span>
+                        </div>
+                        <p class="text-sm text-gray-400 mb-4">Teste hipóteses de negócio em linguagem natural. Ex: "aumentar o preço em 10% e reduzir cpv em 5%"</p>
+                        <textarea id="simulation-input" class="w-full bg-navy border border-gray-600 text-gray-200 rounded-md p-2 text-sm focus:ring-brand-orange focus:border-brand-orange" placeholder="Escreva seu cenário aqui..."></textarea>
+                        <button id="btn-run-simulation" class="mt-2 w-full bg-brand-orange hover:bg-brand-orange-dark text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
+                           Simular
+                        </button>
+                        <div id="simulation-loader" class="hidden text-center py-4">
+                            <div class="loader mx-auto"></div>
+                            <p class="text-sm text-gray-500 mt-2">Calculando impacto...</p>
+                        </div>
+                        <div id="simulation-result" class="mt-4 text-sm text-gray-300 space-y-4"></div>
+                    </div>
+                    <!-- Bloco 4 -->
+                    <div id="block4-container" class="space-y-6">
+                         <div class="card">
+                             <h3 class="text-xl font-bold text-white mb-4">Tendência de Resultados</h3>
+                             <div class="h-80 sm:h-96"><canvas id="lineChart"></canvas></div>
+                         </div>
+                         <div class="card">
+                              <h3 class="text-xl font-bold text-white mb-4">Tendência de Despesas</h3>
+                              <div class="h-80 sm:h-96"><canvas id="barChart"></canvas></div>
+                         </div>
+                    </div>
+                </div>
+                <!-- Coluna Direita -->
+                <div class="space-y-6">
+                    <!-- Bloco 2 -->
+                    <div class="card">
+                        <h2 class="text-xl font-bold text-white mb-4">Margens e Indicadores</h2>
+                        <div id="block2-indicators" class="grid grid-cols-3 gap-x-2"></div>
+                    </div>
+                     <!-- Bloco Médias Mensais -->
+                    <div class="card">
+                        <h2 class="text-xl font-bold text-white mb-4">Médias Mensais</h2>
+                        <div id="block-averages" class="space-y-2"></div>
+                    </div>
+                    <!-- Bloco 3 -->
+                    <div class="card">
+                        <h2 class="text-xl font-bold text-white mb-4">Estrutura de Custos</h2>
+                        <div class="mx-auto" style="height: 250px;"><canvas id="doughnutChart"></canvas></div>
+                    </div>
+                    <!-- Bloco Análise Competitiva Gemini -->
+                    <div class="card gemini-feature hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-white">✨ Análise Competitiva</h2>
+                            <span class="text-xs font-medium text-gray-300 bg-navy/80 px-2 py-1 rounded-full">Powered by Gemini</span>
+                        </div>
+                        <p class="text-sm text-gray-400 mb-4">Compare suas margens com a média do seu setor em Uberlândia.</p>
+                        <button id="btn-run-benchmark" class="w-full bg-teal-600 hover:bg-teal-500 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
+                           Analisar Mercado
+                        </button>
+                        <div id="benchmark-loader" class="hidden text-center py-4">
+                            <div class="loader mx-auto"></div>
+                            <p class="text-sm text-gray-500 mt-2">Analisando o mercado...</p>
+                        </div>
+                        <div id="benchmark-result" class="mt-4 text-sm text-gray-300 space-y-4"></div>
+                    </div>
+                    <!-- Bloco Análise Gemini -->
+                    <div class="card gemini-feature hidden">
+                        <div class="flex justify-between items-center mb-4">
+                            <h2 class="text-xl font-bold text-white">✨ Análise Inteligente</h2>
+                            <span class="text-xs font-medium text-gray-300 bg-navy/80 px-2 py-1 rounded-full">Powered by Gemini</span>
+                        </div>
+                        <p class="text-sm text-gray-400 mb-4">Receba um resumo e recomendações estratégicas sobre o período selecionado.</p>
+                        <button id="btn-gemini-analysis" class="w-full bg-navy hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 transition-colors">
+                            Gerar Análise
+                        </button>
+                        <div id="gemini-loader" class="hidden text-center py-4">
+                            <div class="loader mx-auto"></div>
+                            <p class="text-sm text-gray-500 mt-2">Analisando dados...</p>
+                        </div>
+                        <div id="gemini-result" class="mt-4 text-sm prose"></div>
+                    </div>
+                     <!-- Bloco 5 -->
+                    <div class="card">
+                        <h2 class="text-xl font-bold text-white mb-4">Alertas Automáticos</h2>
+                        <div id="block5-alerts" class="space-y-3"></div>
+                    </div>
+                     <!-- Bloco 6 -->
+                    <div class="card">
+                        <h2 class="text-xl font-bold text-white mb-4">Top 5 Meses com Maior Lucro</h2>
+                        <div id="block6-top-expenses"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal para Rascunho de Email -->
+        <div id="email-modal" class="hidden modal-overlay">
+            <div class="modal-content">
+                <h3 class="text-xl font-bold text-white mb-4">Rascunho de E-mail</h3>
+                <div id="email-draft" class="bg-navy p-4 rounded-md border border-gray-700 text-sm whitespace-pre-wrap text-gray-200"></div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button id="btn-copy-email" class="bg-navy hover:bg-gray-800 text-white font-bold py-2 px-4 rounded-lg transition-colors">Copiar Texto</button>
+                    <button id="btn-close-modal" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2 px-4 rounded-lg transition-colors">Fechar</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Modal para Investigação de Causa Raiz -->
+        <div id="investigation-modal" class="hidden modal-overlay">
+            <div class="modal-content">
+                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-brand-orange" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" /></svg>
+                    Investigando Causa Raiz
+                </h3>
+                <div id="investigation-loader" class="text-center py-4">
+                    <div class="loader mx-auto"></div>
+                    <p class="text-sm text-gray-500 mt-2">Analisando os detalhes...</p>
+                </div>
+                <div id="investigation-result" class="prose"></div>
+                <div class="mt-6 flex justify-end gap-4">
+                    <button id="btn-close-investigation-modal" class="bg-gray-700 hover:bg-gray-600 text-gray-200 font-bold py-2 px-4 rounded-lg transition-colors">Fechar</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+    
+    <script>
+    document.addEventListener('DOMContentLoaded', () => {
+        // --- STATE & DATA ---
+        let rawData = [], processedData = [], allRecognizedMonths = [], monthColMap = {}, currentFileName = '', currentSheetUrl = '';
+        let lineChart, barChart, doughnutChart;
+        let lastGeminiAnalysis = '';
+        let geminiEnabled = false;
+        let userApiKey = '';
+
+        // --- DOM ELEMENTS ---
+        const steps = { start: document.getElementById('step-start'), url: document.getElementById('step-url'), upload: document.getElementById('step-upload'), sheet: document.getElementById('step-sheet'), consent: document.getElementById('step-gemini-consent'), dashboard: document.getElementById('dashboard-view') };
+        const loader = document.getElementById('loader');
+        const emailModal = document.getElementById('email-modal');
+        const investigationModal = document.getElementById('investigation-modal');
+        const apiKeyContainer = document.getElementById('api-key-container');
+        const consentButtonsContainer = document.getElementById('consent-buttons-container');
+
+        // --- UTILS ---
+        const showStep = (stepName) => {
+            Object.values(steps).forEach(step => step.classList.add('hidden'));
+            if (steps[stepName]) steps[stepName].classList.remove('hidden');
+        };
+        const showLoader = (show) => loader.classList.toggle('hidden', !show);
+        const normalizeString = (str) => str ? str.toString().trim().toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "") : '';
+        const formatCurrency = (value) => (value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const formatPercent = (value, decimals = 1) => {
+            if (value === null || isNaN(value)) return 'N/A';
+            return `${(value * 100).toFixed(decimals).replace('.', ',')}%`;
+        };
+
+        // --- NEW CSV PARSING LOGIC ---
+        function parseCSVRow(rowString) {
+            const regex = /(?:"([^"]*(?:""[^"]*)*)"|([^,]*))(?:,|$)/g;
+            const row = [];
+            let match;
+            while ((match = regex.exec(rowString)) && match[0] !== '') {
+                let value = match[1] !== undefined ? match[1].replace(/""/g, '"') : match[2];
+                row.push(value);
+            }
+            return row;
+        }
+
+        function parseCell(cell) {
+            if (typeof cell !== 'string') return cell;
+            const cleanedCell = cell.trim();
+            const numberString = cleanedCell.replace('R$', '').replace(/\./g, '').replace(',', '.').trim();
+            const num = parseFloat(numberString);
+            if (!isNaN(num) && isFinite(numberString)) return num;
+            return cleanedCell;
+        }
+
+        async function connectToSheet(url) {
+            currentSheetUrl = url;
+            showLoader(true);
+            try {
+                // Use a CORS proxy to fetch the data
+                const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(url)}`;
+                const response = await fetch(proxyUrl);
+                if (!response.ok) throw new Error('Não foi possível buscar os dados. Verifique o link e as permissões de compartilhamento.');
+                const csvText = await response.text();
+                rawData = csvText.split('\n').map(rowString => parseCSVRow(rowString.trim()).map(parseCell)).filter(row => row.length > 1 || (row.length === 1 && row[0]));
+                if (detectSchemaAndProcessData()) {
+                    showStep('consent');
+                } else {
+                    alert("Não foi possível detectar colunas de meses válidas. Verifique sua planilha.");
+                    showStep('url');
+                }
+            } catch (error) {
+                console.error("Erro ao carregar dados da planilha:", error);
+                alert(`Erro ao carregar dados: ${error.message}`);
+            } finally {
+                showLoader(false);
+            }
+        }
+
+        // --- FILE HANDLING & SETUP ---
+         document.getElementById('btn-use-sheets').addEventListener('click', () => showStep('url'));
+        document.getElementById('btn-use-upload').addEventListener('click', () => showStep('upload'));
+
+        document.getElementById('btn-connect-sheet').addEventListener('click', () => {
+             const url = document.getElementById('sheet-url-input').value.trim();
+             if (!url) {
+                alert('Por favor, insira o link da sua Planilha Google.');
+                return;
+            }
+            connectToSheet(url);
+        });
+        
+        document.getElementById('file-input').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            currentFileName = file.name;
+            showLoader(true);
+            const reader = new FileReader();
+            reader.onload = (event) => {
+                try {
+                    const workbook = XLSX.read(new Uint8Array(event.target.result), { type: 'array' });
+                    
+                    const sheetSelect = document.getElementById('sheet-select');
+                    sheetSelect.innerHTML = '';
+                    workbook.SheetNames.forEach(name => {
+                        const option = document.createElement('option');
+                        option.value = name;
+                        option.textContent = name;
+                        sheetSelect.appendChild(option);
+                    });
+                    const defaultSheet = workbook.SheetNames.find(name => normalizeString(name) === 'dre2024');
+                    if (defaultSheet) sheetSelect.value = defaultSheet;
+                    
+                    document.getElementById('btn-confirm-sheet-yes').onclick = () => {
+                        rawData = XLSX.utils.sheet_to_json(workbook.Sheets[sheetSelect.value], { header: 1, defval: null });
+                        if (detectSchemaAndProcessData()) {
+                            showStep('consent');
+                        } else {
+                            alert("Não foi possível detectar colunas de meses válidas. Verifique sua planilha.");
+                            showStep('upload');
+                        }
+                    };
+                    
+                    document.getElementById('btn-confirm-sheet-no').onclick = () => {
+                        showStep('upload');
+                    };
+
+                    showStep('sheet');
+
+                } catch (error) { console.error("Erro ao ler o arquivo:", error); } 
+                finally { showLoader(false); }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btn-gemini-yes').addEventListener('click', () => {
+            consentButtonsContainer.classList.add('hidden');
+            apiKeyContainer.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-save-key').addEventListener('click', () => {
+            const keyInput = document.getElementById('api-key-input').value;
+            if (keyInput.trim() === '') {
+                alert('Por favor, insira uma chave de API válida.');
+                return;
+            }
+            userApiKey = keyInput.trim();
+            geminiEnabled = true;
+            setupAndShowDashboard();
+        });
+
+        document.getElementById('btn-gemini-no').addEventListener('click', () => {
+            geminiEnabled = false;
+            setupAndShowDashboard();
+        });
+        
+        // --- SCHEMA DETECTION & DATA PROCESSING ---
+        function detectSchemaAndProcessData() {
+            const validMonths = ['janeiro', 'fevereiro', 'março', 'marco', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+            const headerRow = rawData.find(row => row && row.filter(cell => cell && typeof cell === 'string' && isNaN(cell)).length > 2) || rawData[0];
+            
+            if (!headerRow) {
+                console.error("Não foi possível encontrar uma linha de cabeçalho na planilha.");
+                return false;
+            }
+
+            allRecognizedMonths = [];
+            monthColMap = {};
+            headerRow.forEach((cell, index) => {
+                 if (typeof cell !== 'string') return;
+                const normalizedCell = normalizeString(cell);
+                if (validMonths.includes(normalizedCell)) {
+                    const monthName = (normalizedCell === 'marco' ? 'Março' : cell.trim());
+                    const avCell = headerRow[index + 1];
+                    monthColMap[monthName] = { value: index, av: (typeof avCell === 'string' && normalizeString(avCell) === 'av' ? index + 1 : null) };
+                    allRecognizedMonths.push(monthName);
+                }
+            });
+            if (allRecognizedMonths.length === 0) return false;
+
+            processedData = [];
+            let currentSection = 'Sem Seção';
+            const headerRowIndex = rawData.findIndex(row => row && row.filter(cell => cell && typeof cell === 'string' && isNaN(cell)).length > 2);
+            rawData.slice(headerRowIndex + 1).forEach(row => {
+                if (!row || !row[0]) return;
+                const conta = row[0];
+                const isSectionHeader = allRecognizedMonths.every(m => !row[monthColMap[m].value] || isNaN(row[monthColMap[m].value])) && (typeof conta === 'string' && conta === conta.toUpperCase());
+
+                if (isSectionHeader) {
+                    currentSection = conta;
+                } else {
+                    const entry = { conta, section: currentSection, values: {}, avs: {} };
+                    allRecognizedMonths.forEach((month) => {
+                        const val = row[monthColMap[month].value];
+                        const avCol = monthColMap[month].av;
+                        entry.values[month] = typeof val === 'number' ? val : 0;
+                        entry.avs[month] = avCol && typeof row[avCol] === 'number' ? row[avCol] : null;
+                    });
+                    processedData.push(entry);
+                }
+            });
+            return true;
+        }
+        
+        // --- DASHBOARD CALCULATION & RENDERING ---
+        function calculateMetricsForPeriod(selectedMonths) {
+            const getMonthlyData = (findNames, fallbackType = null, fallbackName = null) => {
+                let row = processedData.find(r => typeof r.conta === 'string' && findNames.includes(normalizeString(r.conta)));
+                if (row) return row;
+                if (fallbackType === 'findRow') return processedData.find(r => typeof r.conta === 'string' && normalizeString(r.conta) === normalizeString(fallbackName)) || null;
+                if (fallbackType === 'sumSection') {
+                    const sectionRows = processedData.filter(r => typeof r.section === 'string' && normalizeString(r.section).includes(normalizeString(fallbackName)));
+                    if (sectionRows.length > 0) {
+                        const totals = { conta: fallbackName, values: {}, avs: {} };
+                        allRecognizedMonths.forEach(m => {
+                            totals.values[m] = sectionRows.reduce((sum, r) => sum + (r.values[m] || 0), 0);
+                            totals.avs[m] = null;
+                        });
+                        return totals;
+                    }
+                }
+                return null;
+            };
+
+            const emptyData = () => {
+                const data = { values: {}, avs: {} };
+                allRecognizedMonths.forEach(m => { data.values[m] = 0; data.avs[m] = 0; });
+                return data;
+            };
+
+            let receitaRow = getMonthlyData(['receita liquida']);
+            if (!receitaRow) {
+                const vendas = getMonthlyData(['venda de produtos']) || emptyData();
+                const devolucoes = getMonthlyData(['devolucao de vendas']) || emptyData();
+                receitaRow = { conta: 'Receita Líquida', ...emptyData() };
+                allRecognizedMonths.forEach(m => {
+                    receitaRow.values[m] = (vendas.values[m] || 0) - (devolucoes.values[m] || 0);
+                });
+            }
+            
+            const cpvRow = getMonthlyData(['custo do produto vendido'], 'findRow', 'custo do produto') || emptyData();
+            const dvRow = getMonthlyData(['despesas variaveis'], 'sumSection', 'despesas variaveis') || emptyData();
+            const impostosRow = getMonthlyData(['impostos sobre vendas']) || emptyData();
+            const doRow = getMonthlyData(['despesas operacionais'], 'sumSection', 'despesas operacionais') || emptyData();
+            const dfRow = getMonthlyData(['despesas fixas'], 'sumSection', 'despesas fixas') || emptyData();
+            
+            const mcRow = { conta: 'Margem de Contribuição', ...emptyData() };
+            const llRow = { conta: 'Lucro Líquido', ...emptyData() };
+            allRecognizedMonths.forEach(m => {
+                mcRow.values[m] = (receitaRow.values[m] || 0) - (cpvRow.values[m] || 0) - (dvRow.values[m] || 0) - (impostosRow.values[m] || 0);
+                llRow.values[m] = mcRow.values[m] - (doRow.values[m] || 0);
+            });
+
+            return {receitaRow, cpvRow, dvRow, impostosRow, doRow, dfRow, mcRow, llRow};
+        }
+
+        function updateBlock2(metrics, selectedMonths, totalReceita) {
+            const totalMC = selectedMonths.reduce((s, m) => s + metrics.mcRow.values[m], 0);
+            const totalLL = selectedMonths.reduce((s, m) => s + metrics.llRow.values[m], 0);
+            const totalDO = selectedMonths.reduce((s, m) => s + (metrics.doRow.values ? metrics.doRow.values[m] : 0), 0);
+            
+            const margemContribuicao = totalReceita !== 0 ? totalMC / totalReceita : 0;
+            const margemOperacional = totalReceita !== 0 ? totalLL / totalReceita : 0;
+            const pontoEquilibrio = margemContribuicao > 0 ? totalDO / margemContribuicao : 0;
+
+            document.getElementById('block2-indicators').innerHTML = `
+                <div class="indicator-card">
+                    <p class="indicator-value">${formatPercent(margemContribuicao)}</p>
+                    <p class="indicator-label">M. Contribuição</p>
+                </div>
+                <div class="indicator-card">
+                    <p class="indicator-value">${formatPercent(margemOperacional)}</p>
+                    <p class="indicator-label">M. Operacional</p>
+                </div>
+                <div class="indicator-card">
+                    <p class="indicator-value">${pontoEquilibrio > 0 ? formatCurrency(pontoEquilibrio) : 'N/A'}</p>
+                    <p class="indicator-label">Ponto de Equilíbrio</p>
+                </div>
+            `;
+        }
+
+        function updateAveragesBlock(metrics, selectedMonths, totalReceita) {
+            const totalMC = selectedMonths.reduce((s, m) => s + metrics.mcRow.values[m], 0);
+            const totalLL = selectedMonths.reduce((s, m) => s + metrics.llRow.values[m], 0);
+            
+            const numMonths = selectedMonths.length;
+            const mediaFaturamento = numMonths > 0 ? totalReceita / numMonths : 0;
+            const mediaMC = numMonths > 0 ? totalMC / numMonths : 0;
+            const mediaLL = numMonths > 0 ? totalLL / numMonths : 0;
+            
+            const faturamentoColor = 'text-white';
+            const mcColor = mediaMC >= 0 ? 'text-green-400' : 'text-red-400';
+            const llColor = mediaLL >= 0 ? 'text-green-400' : 'text-red-400';
+
+            document.getElementById('block-averages').innerHTML = `
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400 font-medium">Faturamento</span>
+                    <span class="font-bold text-lg ${faturamentoColor}">${formatCurrency(mediaFaturamento)}</span>
+                </div>
+                <div class="flex justify-between items-center py-2 border-b border-gray-700">
+                    <span class="text-gray-400 font-medium">M. Contrib.</span>
+                    <span class="font-bold text-lg ${mcColor}">${formatCurrency(mediaMC)}</span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                    <span class="text-gray-400 font-medium">Lucro Líquido</span>
+                    <span class="font-bold text-lg ${llColor}">${formatCurrency(mediaLL)}</span>
+                </div>
+            `;
+        }
+
+        function updateBlock3(metrics, selectedMonths, totalReceita) {
+            const totalCPV = selectedMonths.reduce((s, m) => s + metrics.cpvRow.values[m], 0);
+            const totalDV = selectedMonths.reduce((s, m) => s + metrics.dvRow.values[m], 0);
+            const totalImpostos = selectedMonths.reduce((s, m) => s + metrics.impostosRow.values[m], 0);
+            const totalDO = selectedMonths.reduce((s, m) => s + metrics.doRow.values[m], 0);
+            const totalLL = selectedMonths.reduce((s, m) => s + metrics.llRow.values[m], 0);
+
+            const dataValues = [totalCPV, totalDV, totalImpostos, totalDO, totalLL];
+            const dataLabels = ['CPV', 'Desp. Variáveis', 'Impostos', 'Desp. Operacionais', 'Lucro Líquido'];
+            const totalSumForPercentage = dataValues.reduce((a, b) => a + b, 0);
+
+            doughnutChart.data = {
+                labels: dataLabels,
+                datasets: [{
+                    data: dataValues,
+                    backgroundColor: ['#e53e3e', '#f6ad55', '#dd6b20', '#ed8936', '#38a169'],
+                    borderColor: '#1e3a5f',
+                    borderWidth: 4
+                }]
+            };
+
+            if (!doughnutChart.options.plugins) doughnutChart.options.plugins = {};
+            if (!doughnutChart.options.plugins.tooltip) doughnutChart.options.plugins.tooltip = {};
+            if (!doughnutChart.options.plugins.tooltip.callbacks) doughnutChart.options.plugins.tooltip.callbacks = {};
+            if (!doughnutChart.options.plugins.legend) doughnutChart.options.plugins.legend = {};
+            if (!doughnutChart.options.plugins.legend.labels) doughnutChart.options.plugins.legend.labels = {};
+
+            doughnutChart.options.plugins.tooltip.callbacks.label = function(context) {
+                const label = context.label || '';
+                const value = context.raw;
+                const percentage = totalSumForPercentage > 0 ? (value / totalSumForPercentage * 100).toFixed(1) : 0;
+                return `${label}: ${formatCurrency(value)} (${percentage.replace('.',',')}%)`;
+            };
+            
+            doughnutChart.options.plugins.legend.position = 'bottom';
+            doughnutChart.options.plugins.legend.labels.generateLabels = function(chart) {
+                const data = chart.data;
+                if (data.labels.length && data.datasets.length) {
+                    const { labels: { pointStyle } } = chart.legend.options;
+                    const meta = chart.getDatasetMeta(0);
+                    const total = meta.total || totalSumForPercentage;
+                    
+                    return data.labels.map((label, i) => {
+                        const style = meta.controller.getStyle(i);
+                        const value = data.datasets[0].data[i];
+                        const percentage = total > 0 ? (value / total * 100).toFixed(1) : 0;
+
+                        return {
+                            text: `${label} (${percentage.replace('.',',')}%)`,
+                            fillStyle: style.backgroundColor,
+                            strokeStyle: style.borderColor,
+                            lineWidth: style.borderWidth,
+                            pointStyle: pointStyle || 'circle',
+                            hidden: !chart.getDataVisibility(i),
+                            index: i
+                        };
+                    });
+                }
+                return [];
+            };
+
+            doughnutChart.update();
+        }
+
+        function updateBlock4(metrics, selectedMonths) {
+            const lineData = { receita: [], cpv: [], margem: [], lucro: [] };
+            const barData = { dv: [], do: [] };
+            selectedMonths.forEach(m => {
+                lineData.receita.push(metrics.receitaRow.values[m]);
+                lineData.cpv.push(metrics.cpvRow.values[m]);
+                lineData.margem.push(metrics.mcRow.values[m]);
+                lineData.lucro.push(metrics.llRow.values[m]);
+                barData.dv.push(metrics.dvRow.values[m]);
+                barData.do.push(metrics.doRow.values[m]);
+            });
+
+            lineChart.data = {
+                labels: selectedMonths,
+                datasets: [
+                    { label: 'Receita', data: lineData.receita, borderColor: '#f97316', tension: 0.2, borderWidth: 3, pointBackgroundColor: '#f97316' },
+                    { label: 'Lucro', data: lineData.lucro, borderColor: '#4299e1', tension: 0.2, borderWidth: 2, pointBackgroundColor: '#4299e1' }
+                ]};
+            barChart.data = {
+                labels: selectedMonths,
+                datasets: [
+                    { label: 'CPV', data: lineData.cpv, backgroundColor: '#0a2342' },
+                    { label: 'D. Operacionais', data: barData.do, backgroundColor: '#a0aec0' }
+                ]};
+            lineChart.update(); barChart.update();
+        }
+
+        function updateBlock5(metrics, selectedMonths) {
+            const alertsContainer = document.getElementById('block5-alerts');
+            alertsContainer.innerHTML = '';
+            let hasAlerts = false;
+
+            const createAlert = (type, message, context = null) => {
+                hasAlerts = true;
+                const icon = type === 'warning' ? '⚠️' : '✅';
+                let investigationButton = '';
+                if (context && type === 'warning' && geminiEnabled) {
+                    investigationButton = `<button class="ml-4 text-xs bg-navy/80 text-gray-200 font-semibold py-1 px-3 rounded-full hover:bg-navy btn-investigate transition-colors"
+                        data-type="${context.type}"
+                        data-month="${context.month}"
+                        data-prev-month="${context.prevMonth || ''}">✨ Investigar</button>`;
+                }
+
+                alertsContainer.innerHTML += `
+                    <div class="alert-item ${type === 'warning' ? 'alert-warning' : 'alert-success'}">
+                        <div class="flex-grow flex items-center">
+                            <span class="mr-3 text-xl">${icon}</span>
+                            <div>${message}</div>
+                        </div>
+                        ${investigationButton} 
+                    </div>`;
+            };
+
+            const lowMarginMonths = [];
+            selectedMonths.forEach(m => {
+                const receita = metrics.receitaRow.values[m];
+                const mc = metrics.mcRow.values[m];
+                if (receita > 0 && (mc / receita) < 0.40) {
+                    lowMarginMonths.push(m);
+                }
+            });
+
+            if (lowMarginMonths.length > 0) {
+                const lastProblematicMonth = lowMarginMonths[lowMarginMonths.length - 1];
+                createAlert('warning', `Margem de Contribuição abaixo de 40% em: <strong>${lowMarginMonths.join(', ')}</strong>.`, {
+                    type: 'low_margin',
+                    month: lastProblematicMonth
+                });
+            }
+
+            for (let i = 1; i < selectedMonths.length; i++) {
+                const prevM = selectedMonths[i-1], currM = selectedMonths[i];
+                const prevReceita = metrics.receitaRow.values[prevM], currReceita = metrics.receitaRow.values[currM];
+                const prevDO = metrics.doRow.values[prevM], currDO = metrics.doRow.values[currM];
+                const prevLL = metrics.llRow.values[prevM], currLL = metrics.llRow.values[currM];
+
+                if (prevReceita > 0 && prevDO > 0 && ((currReceita-prevReceita)/prevReceita < (currDO-prevDO)/prevDO)) {
+                    createAlert('warning', `Despesas Operacionais cresceram mais que a Receita de <strong>${prevM} para ${currM}</strong>.`, {
+                        type: 'do_growth',
+                        month: currM,
+                        prevMonth: prevM
+                    });
+                }
+                if (prevReceita > 0 && prevLL > 0 && ((currReceita-prevReceita)/prevReceita < (currLL-prevLL)/prevLL)) {
+                    createAlert('success', `Lucro Líquido cresceu mais rápido que a Receita de <strong>${prevM} para ${currM}</strong>.`);
+                }
+            }
+
+            if (!hasAlerts) alertsContainer.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Nenhum alerta automático para o período.</p>';
+        }
+        
+        function updateBlock6() {
+            const metrics = calculateMetricsForPeriod(allRecognizedMonths);
+            const profitsByMonth = allRecognizedMonths.map(month => ({
+                month: month,
+                profit: metrics.llRow.values[month]
+            }));
+
+            const topMonths = profitsByMonth.sort((a, b) => b.profit - a.profit).slice(0, 5);
+
+            const container = document.getElementById('block6-top-expenses');
+            if (topMonths.length > 0 && topMonths[0].profit > 0) {
+                const maxProfit = topMonths[0].profit;
+                
+                container.innerHTML = topMonths.map((e, index) => {
+                    const barWidth = maxProfit > 0 ? (e.profit / maxProfit) * 100 : 0;
+                    const rankColors = ['text-amber-400', 'text-slate-400', 'text-amber-600'];
+                    const rankColor = index < 3 ? rankColors[index] : 'text-gray-400';
+
+                    return `
+                        <div class="flex items-center space-x-3 py-1.5">
+                            <div class="font-bold ${rankColor} w-6 text-center text-lg">${index + 1}</div>
+                            <div class="flex-1">
+                                <div class="flex justify-between items-center mb-1 text-sm">
+                                    <span class="font-medium text-gray-300">${e.month}</span>
+                                    <span class="font-bold text-white">${formatCurrency(e.profit)}</span>
+                                </div>
+                                <div class="w-full bg-navy rounded-full h-2.5">
+                                    <div class="bg-gradient-to-r from-brand-orange to-yellow-400 h-2.5 rounded-full" style="width: ${barWidth}%"></div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+
+            } else {
+                container.innerHTML = '<p class="text-sm text-gray-500 text-center py-4">Não há dados de lucro para exibir.</p>';
+            }
+        }
+
+        function updateDashboard() {
+            const selectedMonths = Array.from(document.getElementById('month-filter').selectedOptions).map(opt => opt.value);
+            if (selectedMonths.length === 0) return;
+
+            const metrics = calculateMetricsForPeriod(selectedMonths);
+            const totalReceita = selectedMonths.reduce((sum, m) => sum + (metrics.receitaRow.values[m] || 0), 0);
+            
+            const renderMetricCard = (container, title, row) => {
+                const totalValue = selectedMonths.reduce((sum, m) => sum + (row.values[m] || 0), 0);
+                const av = totalReceita !== 0 ? totalValue / totalReceita : 0;
+                container.innerHTML += `
+                    <div class="metric-card">
+                        <div>
+                            <h3 class="metric-title">${title}</h3>
+                            <p class="metric-value">${formatCurrency(totalValue)}</p>
+                        </div>
+                        <span class="av-chip">AV ${formatPercent(title === 'Receita Líquida' ? 1 : av)}</span>
+                    </div>`;
+            };
+
+            const block1Container = document.getElementById('block1-metrics');
+            block1Container.innerHTML = '';
+            renderMetricCard(block1Container, 'Receita Líquida', metrics.receitaRow);
+            renderMetricCard(block1Container, 'Custo do Produto Vendido', metrics.cpvRow);
+            renderMetricCard(block1Container, 'Despesas Variáveis', metrics.dvRow);
+            renderMetricCard(block1Container, 'Impostos sobre Vendas', metrics.impostosRow);
+            renderMetricCard(block1Container, 'Margem de Contribuição', metrics.mcRow);
+            renderMetricCard(block1Container, 'Despesas Operacionais', metrics.doRow);
+            renderMetricCard(block1Container, 'Lucro Líquido', metrics.llRow);
+
+            updateBlock2(metrics, selectedMonths, totalReceita);
+            updateAveragesBlock(metrics, selectedMonths, totalReceita);
+            updateBlock3(metrics, selectedMonths, totalReceita);
+            updateBlock4(metrics, selectedMonths);
+            updateBlock5(metrics, selectedMonths);
+            updateBlock6();
+        }
+        
+        function setupAndShowDashboard() {
+            showLoader(true);
+            setTimeout(() => {
+                setupDashboard();
+                const geminiFeatures = document.querySelectorAll('.gemini-feature');
+                if (geminiEnabled) {
+                    geminiFeatures.forEach(el => el.classList.remove('hidden'));
+                } else {
+                    geminiFeatures.forEach(el => el.classList.add('hidden'));
+                }
+                showStep('dashboard');
+                showLoader(false);
+            }, 50);
+        }
+
+        function setupDashboard() {
+            document.getElementById('file-name-display').textContent = `Analisando: ${currentFileName || 'Dados do Google Sheets'}`;
+            const monthFilter = document.getElementById('month-filter');
+            monthFilter.innerHTML = '';
+            allRecognizedMonths.forEach(month => {
+                monthFilter.appendChild(new Option(month, month, true, true));
+            });
+            
+            Chart.defaults.color = '#a0aec0';
+            Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+            Chart.defaults.font.family = 'Poppins';
+
+            lineChart = new Chart(document.getElementById('lineChart'), { type: 'line', data: {}, options: {responsive: true, maintainAspectRatio: false} });
+            barChart = new Chart(document.getElementById('barChart'), { type: 'bar', data: {}, options: {responsive: true, maintainAspectRatio: false} });
+            doughnutChart = new Chart(document.getElementById('doughnutChart'), { type: 'doughnut', data: {}, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: {color: '#a0aec0'} } } } });
+
+            monthFilter.addEventListener('change', updateDashboard);
+            document.getElementById('view-monthly').addEventListener('click', () => toggleView(true));
+            document.getElementById('view-consolidated').addEventListener('click', () => toggleView(false));
+            document.getElementById('btn-save-pdf').addEventListener('click', handleSavePDF);
+            document.getElementById('your-logo-input').addEventListener('change', () => handleLogoUpload('your-logo-input', 'your-logo-img'));
+            document.getElementById('client-logo-input').addEventListener('change', () => handleLogoUpload('client-logo-input', 'client-logo-img'));
+            document.getElementById('btn-generate-link').addEventListener('click', handleGenerateClientLink);
+            
+            handleUrlParamsOnLoad();
+        }
+
+        function toggleView(isMonthly) {
+            const monthlyBtn = document.getElementById('view-monthly');
+            const consolidatedBtn = document.getElementById('view-consolidated');
+            monthlyBtn.classList.toggle('bg-navy-light', isMonthly);
+            monthlyBtn.classList.toggle('text-white', isMonthly);
+            monthlyBtn.classList.toggle('bg-navy', !isMonthly);
+            monthlyBtn.classList.toggle('text-gray-400', !isMonthly);
+
+            consolidatedBtn.classList.toggle('bg-navy-light', !isMonthly);
+            consolidatedBtn.classList.toggle('text-white', !isMonthly);
+            consolidatedBtn.classList.toggle('bg-navy', isMonthly);
+            consolidatedBtn.classList.toggle('text-gray-400', isMonthly);
+
+            document.getElementById('block4-container').classList.toggle('hidden', !isMonthly);
+            document.getElementById('block5-alerts').classList.toggle('hidden', !isMonthly);
+        }
+
+        // --- PDF & LOGO UPLOAD ---
+        function handleLogoUpload(inputId, imgId) {
+            const input = document.getElementById(inputId);
+            const img = document.getElementById(imgId);
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+        
+        async function handleSavePDF(e) {
+            const button = e.currentTarget;
+            button.disabled = true;
+            button.innerHTML = 'Salvando...';
+
+            const dashboardElement = document.getElementById('dashboard-view');
+            
+            const block4 = document.getElementById('block4-container');
+            const block5 = document.getElementById('block5-alerts');
+            const wasBlock4Hidden = block4.classList.contains('hidden');
+            const wasBlock5Hidden = block5.classList.contains('hidden');
+            
+            block4.classList.remove('hidden');
+            block5.classList.remove('hidden');
+            
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            try {
+                const { jsPDF } = window.jspdf;
+                const canvas = await html2canvas(dashboardElement, {
+                    scale: 1.5,
+                    useCORS: true,
+                    backgroundColor: '#0a2342'
+                });
+                const imgData = canvas.toDataURL('image/png');
+                
+                const pdf = new jsPDF({
+                    orientation: 'landscape',
+                    unit: 'px',
+                    format: 'a4'
+                });
+                
+                const pdfWidth = pdf.internal.pageSize.getWidth();
+                const pdfHeight = pdf.internal.pageSize.getHeight();
+                
+                const canvasWidth = canvas.width;
+                const canvasHeight = canvas.height;
+                const canvasRatio = canvasWidth / canvasHeight;
+                const pdfRatio = pdfWidth / pdfHeight;
+
+                let finalWidth, finalHeight;
+                if (canvasRatio > pdfRatio) {
+                    finalWidth = pdfWidth;
+                    finalHeight = pdfWidth / canvasRatio;
+                } else {
+                    finalHeight = pdfHeight;
+                    finalWidth = pdfHeight * canvasRatio;
+                }
+                
+                const x = (pdfWidth - finalWidth) / 2;
+                const y = (pdfHeight - finalHeight) / 2;
+
+                pdf.addImage(imgData, 'PNG', x, y, finalWidth, finalHeight);
+                pdf.save('dashboard-financeiro.pdf');
+
+            } catch (error) {
+                console.error('Erro ao gerar PDF:', error);
+                alert('Ocorreu um erro ao tentar salvar o PDF.');
+            } finally {
+                if (wasBlock4Hidden) block4.classList.add('hidden');
+                if (wasBlock5Hidden) block5.classList.add('hidden');
+
+                button.disabled = false;
+                button.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd" /></svg>
+                    Salvar PDF
+                `;
+            }
+        }
+
+        function handleGenerateClientLink(e) {
+            const baseUrlInput = document.getElementById('base-url-input');
+            let baseUrl = baseUrlInput.value.trim();
+
+            if (!baseUrl) {
+                alert("Por favor, insira o seu link base do Netlify para gerar links para clientes.");
+                baseUrlInput.focus();
+                return;
+            }
+            
+            // Garante que a URL não tem uma barra no final para evitar barras duplas
+            if (baseUrl.endsWith('/')) {
+                baseUrl = baseUrl.slice(0, -1);
+            }
+
+            if (!currentSheetUrl) {
+                alert("Para gerar um link para o cliente, primeiro conecte a uma Planilha Google.");
+                return;
+            }
+            const clientUrl = `${baseUrl}?sheet=${encodeURIComponent(currentSheetUrl)}`;
+            
+            const dummy = document.createElement('textarea');
+            document.body.appendChild(dummy);
+            dummy.value = clientUrl;
+            dummy.select();
+            document.execCommand('copy');
+            document.body.removeChild(dummy);
+
+            const button = e.currentTarget;
+            button.innerHTML = 'Link Copiado!';
+            button.classList.add('bg-green-500', 'hover:bg-green-600');
+            button.classList.remove('bg-gray-600', 'hover:bg-gray-500');
+
+            setTimeout(() => {
+                button.innerHTML = `
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.586 4.586a2 2 0 112.828 2.828l-3 3a2 2 0 01-2.828 0m-4.242 6.364a2 2 0 00-2.828-2.828l-3 3a2 2 0 102.828 2.828l3-3a2 2 0 000-2.828zM3.414 9.414a2 2 0 010-2.828l3-3a2 2 0 112.828 2.828L6.414 9.414a2 2 0 01-2.828 0z" clip-rule="evenodd" /></svg>
+                    Gerar Link do Cliente
+                `;
+                button.classList.remove('bg-green-500', 'hover:bg-green-600');
+                button.classList.add('bg-gray-600', 'hover:bg-gray-500');
+            }, 2500);
+        }
+
+        async function handleUrlParamsOnLoad() {
+            const params = new URLSearchParams(window.location.search);
+            const sheetUrl = params.get('sheet');
+            if (sheetUrl) {
+                await connectToSheet(sheetUrl);
+            } else {
+                showStep('start');
+            }
+        }
+
+        // --- GEMINI API INTEGRATION ---
+        async function callGeminiAPI(systemPrompt, userPrompt, generationConfig = null, useGrounding = false, retries = 3, delay = 1000) {
+            const apiKey = geminiEnabled ? userApiKey : "";
+            if (!apiKey) {
+                console.error("Chave de API do Gemini não fornecida.");
+                return "Erro: A chave de API para os recursos de IA não foi configurada.";
+            }
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-05-20:generateContent`;
+            const payload = {
+                contents: [{ parts: [{ text: userPrompt }] }],
+                systemInstruction: { parts: [{ text: systemPrompt }] },
+            };
+            if(generationConfig) payload.generationConfig = generationConfig;
+            if(useGrounding) payload.tools = [{ "google_search": {} }];
+
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(apiUrl + `?key=${apiKey}`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const result = await response.json();
+                    const candidate = result.candidates?.[0];
+                    if (candidate?.content?.parts?.[0]?.text) return candidate.content.parts[0].text;
+                    console.error("Resposta da API Gemini inválida:", result);
+                    return generationConfig ? `{"error": "Resposta da API inválida."}` : "Erro: Resposta da API inválida.";
+                } catch (error) {
+                    console.error(`Tentativa ${i + 1} falhou:`, error);
+                    if (i === retries - 1) {
+                        let errorMessage = "Erro ao contatar a API Gemini. Verifique sua conexão com a internet e tente novamente.";
+                        if (error.message.includes("401") || error.message.includes("403")) {
+                            errorMessage = "Erro de Autenticação. Verifique se sua chave de API é válida, se a API Generative Language está ativa no seu projeto Google Cloud e se a chave não possui restrições de website.";
+                        } else if (error.message.includes("400")) {
+                            errorMessage = "Erro na requisição (400). O modelo pode não suportar a sua pergunta ou a chave de API é inválida. Tente reformular ou verificar a chave.";
+                        }
+                        return generationConfig ? `{"error": "${errorMessage}"}` : `Erro: ${errorMessage}`;
+                    }
+                    await new Promise(res => setTimeout(res, delay));
+                    delay *= 2;
+                }
+            }
+        }
+
+        function formatResponseForHTML(text) {
+            let html = text
+                .replace(/^## (.*$)/gim, '<h3 class="font-bold text-gray-200 mt-4 mb-2">$1</h3>')
+                .replace(/^\* (.*$)/gim, '<li class="ml-4">$1</li>');
+            html = html.replace(/(\r\n|\n|\r)/gm, '<br>').replace(/<br><li/g, '<li').replace(/<\/li><br>/g, '</li>');
+            return `<ul>${html.replace(/<\/ul><br>$/, '</ul>')}</ul>`.replace(/<\/li><ul>/g, '</li><li><ul>').replace(/<\/ul><\/li>/g, '</ul></li></li>').replace(/<\/h3><br><ul>/g, '</h3><ul>');
+        }
+        
+        // -- Feature: Análise Inteligente --
+        document.getElementById('btn-gemini-analysis').addEventListener('click', handleGeminiAnalysis);
+        async function handleGeminiAnalysis() {
+            const loader = document.getElementById('gemini-loader');
+            const resultContainer = document.getElementById('gemini-result');
+            const button = document.getElementById('btn-gemini-analysis');
+            loader.classList.remove('hidden');
+            resultContainer.innerHTML = '';
+            button.disabled = true;
+
+            const selectedMonths = Array.from(document.getElementById('month-filter').selectedOptions).map(opt => opt.value);
+            if (selectedMonths.length === 0) {
+                resultContainer.textContent = "Selecione pelo menos um mês.";
+                loader.classList.add('hidden');
+                button.disabled = false;
+                return;
+            }
+            const { prompt, plainText } = buildBaseMetricsPrompt(selectedMonths);
+            const systemPrompt = "Você é um analista financeiro sênior. Analise os dados e forneça um resumo, pontos de atenção e recomendações acionáveis. Responda em português do Brasil, usando markdown (## para títulos, * para listas).";
+            
+            const analysisText = await callGeminiAPI(systemPrompt, prompt);
+            
+            if (analysisText.startsWith('Erro:')) {
+                resultContainer.innerHTML = `<p class="text-red-400">${analysisText}</p>`;
+            } else {
+                lastGeminiAnalysis = plainText + '\n\n' + analysisText; // Store for email
+                resultContainer.innerHTML = formatResponseForHTML(analysisText) + 
+                    `<button id="btn-generate-email" class="mt-4 w-full bg-gray-600 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded-lg">✨ Gerar Rascunho de E-mail</button>`;
+                document.getElementById('btn-generate-email').addEventListener('click', handleEmailDraft);
+            }
+
+            loader.classList.add('hidden');
+            button.disabled = false;
+        }
+        
+        // -- Feature: Rascunho de E-mail --
+        document.getElementById('btn-close-modal').addEventListener('click', () => emailModal.classList.add('hidden'));
+        document.getElementById('btn-copy-email').addEventListener('click', (e) => {
+            document.execCommand('copy'); // Use execCommand for broader compatibility in iframes
+            e.target.textContent = 'Copiado!';
+            setTimeout(() => e.target.textContent = 'Copiar Texto', 2000);
+        });
+
+        // Add a handler to select text for copying
+        emailModal.addEventListener('copy', (event) => {
+            const selection = document.getElementById('email-draft').innerText;
+            event.clipboardData.setData('text/plain', selection);
+            event.preventDefault();
+        });
+
+        async function handleEmailDraft() {
+            const selectedMonths = Array.from(document.getElementById('month-filter').selectedOptions).map(opt => opt.value);
+            const systemPrompt = "Você é um assistente executivo. Converta uma análise financeira em um rascunho de e-mail claro e conciso para a diretoria. Responda em português do Brasil.";
+            const userPrompt = `Transforme a seguinte análise financeira em um rascunho de email.\n\nAnálise:\n---\n${lastGeminiAnalysis}\n---\n\nFormato:\n**Assunto:** Resumo Financeiro - ${selectedMonths.join(', ')}\n\n**Corpo:**\nPrezados,\n\nSegue um resumo do desempenho para ${selectedMonths.join(', ')}.\n\n[Resumo dos pontos principais aqui]\n\nAtenciosamente,`;
+            
+            const emailText = await callGeminiAPI(systemPrompt, userPrompt);
+             if (emailText.startsWith('Erro:')) {
+                document.getElementById('email-draft').innerText = emailText;
+            } else {
+                document.getElementById('email-draft').innerText = emailText;
+            }
+            emailModal.classList.remove('hidden');
+        }
+
+        // -- Feature: Simulador de Cenários --
+        document.getElementById('btn-run-simulation').addEventListener('click', handleSimulation);
+        
+        function renderSimulationResult(data) {
+            const resultContainer = document.getElementById('simulation-result');
+            if(!data || !data.analiseCombinada) {
+                resultContainer.innerHTML = `<p class="text-red-500">Não foi possível processar o cenário. Tente reformular sua pergunta.</p>`;
+                return;
+            }
+
+            const { analisesIndividuais, analiseCombinada, resumoGeral } = data;
+
+            const getChangeHTML = (changePercent, isPercentagePoint = false) => {
+                const isPositive = changePercent >= 0;
+                const color = isPositive ? 'text-green-400' : 'text-red-400';
+                const icon = isPositive ? 
+                    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd" /></svg>` :
+                    `<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm-3.707-7.293l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 10.586V7a1 1 0 11-2 0v3.586L7.707 9.293a1 1 0 01-1.414-1.414z" clip-rule="evenodd" /></svg>`;
+                return `<div class="flex items-center text-sm font-semibold ${color}">${icon}<span>${(changePercent * 100).toFixed(1).replace('.',',')}${isPercentagePoint ? ' p.p.' : '%'}</span></div>`;
+            }
+            
+            const getIndividualStepHTML = (analise, index) => {
+                if(!analise || !analise.impacto) return '';
+                const lucro = analise.impacto.lucroLiquido;
+                return `
+                    <div class="border border-gray-700 p-3 rounded-lg">
+                        <h4 class="font-bold text-gray-300">Passo ${index + 1}: ${analise.cenario}</h4>
+                        <div class="mt-2 flex justify-between items-center">
+                            <div>
+                                <p class="text-xs text-gray-400">Novo Lucro</p>
+                                <p class="font-semibold text-gray-100">${formatCurrency(lucro.novo)}</p>
+                            </div>
+                            ${getChangeHTML(lucro.variacaoPercentual)}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const getEvaluationHTML = (evalText, tipText) => {
+                const normEval = normalizeString(evalText);
+                let colorClasses = 'bg-navy text-gray-300';
+                let icon = '💡';
+                if(normEval.includes('positivo')) {
+                    colorClasses = 'bg-green-900/50 text-green-300';
+                    icon = '✅';
+                } else if (normEval.includes('negativo') || normEval.includes('risco')) {
+                    colorClasses = 'bg-red-900/50 text-red-300';
+                    icon = '⚠️';
+                } else if (normEval.includes('cautela') || normEval.includes('atencao')) {
+                    colorClasses = 'bg-yellow-900/50 text-yellow-300';
+                    icon = '🤔';
+                }
+
+                return `
+                <div class="mt-4">
+                    <h3 class="font-bold text-white">Avaliação Final</h3>
+                    <div class="mt-2 flex items-start gap-3 p-3 rounded-lg ${colorClasses}">
+                        <span class="text-xl mt-1">${icon}</span>
+                        <div>
+                            <p class="font-semibold">${evalText}</p>
+                            <p class="text-sm opacity-90">${tipText}</p>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+
+            let individualStepsHTML = '';
+            if (analisesIndividuais && analisesIndividuais.length > 1) {
+                individualStepsHTML = `
+                    <div>
+                        <h3 class="font-bold text-white">Análise por Etapas</h3>
+                        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            ${analisesIndividuais.map((analise, i) => getIndividualStepHTML(analise, i)).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            const { impacto: impactoFinal, avaliacao, recomendacao } = analiseCombinada;
+            const lucroFinal = impactoFinal.lucroLiquido;
+            const margemFinal = impactoFinal.margemOperacional;
+
+            resultContainer.innerHTML = `
+                <div class="space-y-4">
+                    ${individualStepsHTML}
+                    <div class="pt-4 border-t border-gray-700">
+                        <h3 class="font-bold text-white">Resultado Final Combinado</h3>
+                        <div class="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-4 text-center">
+                            <div class="bg-navy p-4 rounded-lg">
+                                <p class="text-sm font-medium text-gray-400">Novo Lucro Líquido</p>
+                                <p class="text-2xl font-bold text-white">${formatCurrency(lucroFinal.novo)}</p>
+                                ${getChangeHTML(lucroFinal.variacaoPercentual)}
+                            </div>
+                            <div class="bg-navy p-4 rounded-lg">
+                                 <p class="text-sm font-medium text-gray-400">Nova Margem Operacional</p>
+                                <p class="text-2xl font-bold text-white">${formatPercent(margemFinal.novo)}</p>
+                                ${getChangeHTML(margemFinal.variacaoPercentual, true)}
+                            </div>
+                        </div>
+                    </div>
+                    ${getEvaluationHTML(avaliacao, recomendacao)}
+                    ${resumoGeral ? `<div class="pt-4 border-t border-gray-700"><h3 class="font-bold text-white">Resumo da Interação</h3><p class="text-sm text-gray-400 mt-1">${resumoGeral}</p></div>` : ''}
+                </div>
+            `;
+        }
+
+        async function handleSimulation() {
+            const loader = document.getElementById('simulation-loader');
+            const resultContainer = document.getElementById('simulation-result');
+            const button = document.getElementById('btn-run-simulation');
+            const userInput = document.getElementById('simulation-input').value;
+
+            if (!userInput) {
+                resultContainer.innerHTML = `<p class="text-red-500">Por favor, insira um cenário para simular.</p>`;
+                return;
+            }
+
+            loader.classList.remove('hidden');
+            resultContainer.innerHTML = '';
+            button.disabled = true;
+
+            const selectedMonths = Array.from(document.getElementById('month-filter').selectedOptions).map(opt => opt.value);
+            const { prompt } = buildBaseMetricsPrompt(selectedMonths, `Cenário a ser simulado: "${userInput}"`);
+            
+            const systemPrompt = "Você é um analista de FP&A. Se o usuário fornecer múltiplas mudanças, analise cada uma separadamente e depois o impacto combinado. Se for apenas uma mudança, preencha apenas 'analiseCombinada'. Sua resposta DEVE ser um objeto JSON. Seja sucinto e didático.";
+            
+            const impactoSchema = {
+                type: "OBJECT",
+                properties: {
+                    "lucroLiquido": { type: "OBJECT", properties: {"antigo": {"type": "NUMBER"}, "novo": {"type": "NUMBER"}, "variacaoPercentual": {"type": "NUMBER"}}},
+                    "margemOperacional": { type: "OBJECT", properties: {"antigo": {"type": "NUMBER"}, "novo": {"type": "NUMBER"}, "variacaoPercentual": {"type": "NUMBER"}}}
+                }
+            };
+
+            const responseSchema = {
+              type: "OBJECT",
+              properties: {
+                 "analisesIndividuais": {
+                    "type": "ARRAY",
+                    "description": "Lista de análises para cada mudança individual. Preencher somente se houver mais de uma mudança.",
+                    "items": {
+                        "type": "OBJECT",
+                        "properties": {
+                          "cenario": { "type": "STRING", "description": "Descrição curta da mudança individual." },
+                          "impacto": impactoSchema
+                        }
+                    }
+                },
+                "analiseCombinada": { 
+                  type: "OBJECT",
+                  properties: {
+                    "impacto": impactoSchema,
+                    "avaliacao": { "type": "STRING", "description": "Avaliação curta do impacto combinado (ex: 'Impacto Positivo')." },
+                    "recomendacao": { "type": "STRING", "description": "Dica ou recomendação curta e direta (máximo 2 frases)." },
+                  }
+                },
+                "resumoGeral": { "type": "STRING", "description": "Um parágrafo que resume como as mudanças interagiram para o resultado final."}
+              },
+              required: ["analiseCombinada"]
+            };
+
+            const generationConfig = {
+                responseMimeType: "application/json",
+                responseSchema: responseSchema,
+            };
+
+            const simulationJsonText = await callGeminiAPI(systemPrompt, prompt, generationConfig);
+
+            try {
+                const simulationData = JSON.parse(simulationJsonText);
+                 if (simulationData.error) {
+                    resultContainer.innerHTML = `<p class="text-red-400">Erro: ${simulationData.error}</p>`;
+                } else {
+                    renderSimulationResult(simulationData);
+                }
+            } catch(e) {
+                console.error("Erro ao parsear JSON da simulação:", e);
+                resultContainer.innerHTML = `<p class="text-red-500">Ocorreu um erro ao interpretar a simulação. A resposta da IA foi: </p><p class="text-xs text-gray-500 mt-2">${simulationJsonText}</p>`;
+            }
+
+
+            loader.classList.add('hidden');
+            button.disabled = false;
+        }
+
+        // -- Feature: Análise de Causa Raiz --
+        document.getElementById('app-container').addEventListener('click', (e) => {
+            if (e.target.closest('.btn-investigate')) {
+                const button = e.target.closest('.btn-investigate');
+                const { type, month, prevMonth } = button.dataset;
+                handleInvestigation(type, month, prevMonth);
+            }
+        });
+        document.getElementById('btn-close-investigation-modal').addEventListener('click', () => {
+            investigationModal.classList.add('hidden');
+        });
+
+        async function handleInvestigation(type, month, prevMonth) {
+            const loader = document.getElementById('investigation-loader');
+            const resultContainer = document.getElementById('investigation-result');
+            
+            investigationModal.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            resultContainer.innerHTML = '';
+
+            const metrics = calculateMetricsForPeriod(allRecognizedMonths);
+            let userPrompt = '';
+            const systemPrompt = "Você é um controller financeiro especialista em análise de causa raiz. Responda de forma direta e objetiva, em português do Brasil, usando markdown (## para títulos, * para listas). Identifique o principal fator e sugira uma ação corretiva.";
+
+            if (type === 'low_margin') {
+                const receita = metrics.receitaRow.values[month];
+                const mc = metrics.mcRow.values[month];
+                const mcPercent = receita > 0 ? mc / receita : 0;
+                const cpv = metrics.cpvRow.values[month];
+                const dv = metrics.dvRow.values[month];
+                const topDVs = processedData
+                    .filter(r => normalizeString(r.section).includes('despesas variaveis'))
+                    .map(exp => ({ conta: exp.conta, valor: exp.values[month] }))
+                    .sort((a,b) => b.valor - a.valor)
+                    .slice(0, 5)
+                    .map(e => `- ${e.conta}: ${formatCurrency(e.valor)}`)
+                    .join('\n');
+
+                userPrompt = `A margem de contribuição em ${month} foi de ${formatPercent(mcPercent)}, abaixo da meta de 40%. 
+                Dados do mês:
+                - Receita Líquida: ${formatCurrency(receita)}
+                - CPV: ${formatCurrency(cpv)}
+                - Despesas Variáveis (Total): ${formatCurrency(dv)}
+                - Top 5 Despesas Variáveis:\n${topDVs || 'N/A'}
+
+                Analise esses dados e identifique as causas mais prováveis para a margem baixa. A queda foi puxada pelo aumento de custos/despesas ou por problemas na receita?`;
+            } else if (type === 'do_growth') {
+                const prevReceita = metrics.receitaRow.values[prevMonth];
+                const currReceita = metrics.receitaRow.values[month];
+                const prevDO = metrics.doRow.values[prevMonth];
+                const currDO = metrics.doRow.values[month];
+
+                const crescimentoReceita = prevReceita !== 0 ? (currReceita - prevReceita) / prevReceita : 0;
+                const crescimentoDO = prevDO !== 0 ? (currDO - prevDO) / prevDO : 0;
+
+                const topDOs = processedData
+                    .filter(r => normalizeString(r.section).includes('despesas operacionais'))
+                    .map(exp => ({ 
+                        conta: exp.conta, 
+                        valor: exp.values[month], 
+                        valorAnterior: exp.values[prevMonth],
+                        aumento: exp.values[month] - exp.values[prevMonth]
+                    }))
+                    .filter(e => e.aumento > 0)
+                    .sort((a,b) => b.aumento - a.aumento)
+                    .slice(0, 5)
+                    .map(e => `- ${e.conta}: Aumentou ${formatCurrency(e.aumento)} (de ${formatCurrency(e.valorAnterior)} para ${formatCurrency(e.valor)})`)
+                    .join('\n');
+
+                userPrompt = `O alerta foi: 'Despesas Operacionais (DO) cresceram mais que a Receita de ${prevMonth} para ${month}'.
+                
+                Dados da Variação:
+                - Crescimento da Receita: ${formatPercent(crescimentoReceita)}
+                - Crescimento das DO: ${formatPercent(crescimentoDO)}
+
+                Análise das Contas (Maiores Aumentos):
+                ${topDOs || 'Não foi possível detalhar as contas que mais aumentaram.'}
+
+                Com base EXATAMENTE nos dados acima, apresente uma análise objetiva. Primeiro, em "## Análise da Variação", liste as contas que mais impactaram. Depois, em "## Pontos de Atenção", sugira o que deve ser investigado em cada uma dessas contas.`;
+            }
+
+            const investigationText = await callGeminiAPI(systemPrompt, userPrompt);
+            if (investigationText.startsWith('Erro:')) {
+                 resultContainer.innerHTML = `<p class="text-red-400">${investigationText}</p>`;
+            } else {
+                resultContainer.innerHTML = formatResponseForHTML(investigationText);
+            }
+            loader.classList.add('hidden');
+        }
+
+        // -- Feature: Análise Competitiva (Benchmark) --
+        document.getElementById('btn-run-benchmark').addEventListener('click', handleBenchmarkAnalysis);
+        
+        async function handleBenchmarkAnalysis() {
+            const loader = document.getElementById('benchmark-loader');
+            const resultContainer = document.getElementById('benchmark-result');
+            const button = document.getElementById('btn-run-benchmark');
+            
+            loader.classList.remove('hidden');
+            resultContainer.innerHTML = '';
+            button.disabled = true;
+
+            const selectedMonths = Array.from(document.getElementById('month-filter').selectedOptions).map(opt => opt.value);
+            const metrics = calculateMetricsForPeriod(selectedMonths);
+            const totalReceita = selectedMonths.reduce((sum, m) => sum + (metrics.receitaRow.values[m] || 0), 0);
+            const totalMC = selectedMonths.reduce((s, m) => s + metrics.mcRow.values[m], 0);
+            const totalLL = selectedMonths.reduce((s, m) => s + metrics.llRow.values[m], 0);
+
+            const margemContribuicao = totalReceita !== 0 ? totalMC / totalReceita : 0;
+            const margemOperacional = totalReceita !== 0 ? totalLL / totalReceita : 0;
+            
+            const systemPrompt = "Você é um consultor de negócios especialista no mercado de construção civil de Minas Gerais. Compare os indicadores financeiros da empresa com benchmarks do setor que você encontrar. Forneça uma análise concisa sobre os pontos fortes e fracos da empresa em relação ao mercado, em formato JSON.";
+            const userPrompt = `Nossa empresa, fabricante de esquadrias de alumínio de alto padrão em Uberlândia, MG, apresentou os seguintes indicadores no período analisado:
+            - Margem de Contribuição: ${formatPercent(margemContribuicao)}
+            - Margem Operacional: ${formatPercent(margemOperacional)}
+            
+            Com base em informações de mercado para este setor e região, como esses números se comparam com a média?`;
+
+            const responseSchema = {
+              type: "OBJECT",
+              properties: {
+                 "comparativoMargemContribuicao": {
+                    "type": "OBJECT",
+                    "properties": {
+                      "valorEmpresa": { "type": "NUMBER" },
+                      "mediaMercado": { "type": "NUMBER" },
+                      "avaliacao": { "type": "STRING", "description": "Avaliação curta (ex: 'Acima da média')." }
+                    }
+                },
+                "comparativoMargemOperacional": { 
+                  "type": "OBJECT",
+                  properties: {
+                      "valorEmpresa": { "type": "NUMBER" },
+                      "mediaMercado": { "type": "NUMBER" },
+                      "avaliacao": { "type": "STRING", "description": "Avaliação curta (ex: 'Abaixo da média')." }
+                  }
+                },
+                "recomendacao": { "type": "STRING", "description": "Uma recomendação estratégica curta (máximo 2 frases) baseada na comparação."}
+              },
+              required: ["comparativoMargemContribuicao", "comparativoMargemOperacional", "recomendacao"]
+            };
+
+            const generationConfig = { responseMimeType: "application/json", responseSchema: responseSchema };
+            const benchmarkJsonText = await callGeminiAPI(systemPrompt, userPrompt, generationConfig, true);
+
+            try {
+                const benchmarkData = JSON.parse(benchmarkJsonText);
+                if (benchmarkData.error) {
+                    resultContainer.innerHTML = `<p class="text-red-400">Erro: ${benchmarkData.error}</p>`;
+                } else {
+                    renderBenchmarkResult(benchmarkData);
+                }
+            } catch(e) {
+                console.error("Erro ao parsear JSON do benchmark:", e);
+                resultContainer.innerHTML = `<p class="text-red-500">Ocorreu um erro ao interpretar a análise de mercado.</p><p class="text-xs text-gray-500 mt-2">${benchmarkJsonText}</p>`;
+            }
+
+
+            loader.classList.add('hidden');
+            button.disabled = false;
+        }
+
+        function renderBenchmarkResult(data) {
+            const resultContainer = document.getElementById('benchmark-result');
+            if(!data) {
+                resultContainer.innerHTML = `<p class="text-red-500">Não foi possível processar a análise de mercado.</p>`;
+                return;
+            }
+
+            const { comparativoMargemContribuicao: mc, comparativoMargemOperacional: mo, recomendacao } = data;
+
+            const getComparisonHTML = (title, companyValue, marketValue, evaluation) => {
+                const normEval = normalizeString(evaluation);
+                let color = 'text-yellow-400';
+                if (normEval.includes('acima')) color = 'text-green-400';
+                if (normEval.includes('abaixo')) color = 'text-red-400';
+
+                return `
+                    <div class="bg-navy p-3 rounded-lg">
+                        <p class="text-sm font-medium text-gray-400">${title}</p>
+                        <div class="flex justify-between items-baseline mt-1">
+                            <div>
+                                <span class="text-xl font-bold text-white">${formatPercent(companyValue)}</span>
+                                <span class="text-xs text-gray-300"> (Sua Empresa)</span>
+                            </div>
+                            <div>
+                                <span class="text-lg font-semibold text-gray-400">${formatPercent(marketValue)}</span>
+                                <span class="text-xs text-gray-500"> (Mercado)</span>
+                            </div>
+                        </div>
+                        <p class="text-xs font-semibold text-center mt-2 pt-2 border-t border-gray-700 ${color}">${evaluation}</p>
+                    </div>
+                `;
+            }
+
+            const getEvaluationHTML = (tipText) => {
+                return `
+                <div>
+                    <h3 class="font-bold text-white">Recomendação</h3>
+                    <div class="mt-2 flex items-start gap-3 p-3 rounded-lg bg-navy text-gray-300">
+                        <span class="text-xl mt-1">💡</span>
+                        <div>
+                            <p class="text-sm">${tipText}</p>
+                        </div>
+                    </div>
+                </div>
+                `;
+            }
+
+            resultContainer.innerHTML = `
+                <div class="space-y-3">
+                    ${getComparisonHTML('Margem de Contribuição', mc.valorEmpresa, mc.mediaMercado, mc.avaliacao)}
+                    ${getComparisonHTML('Margem Operacional', mo.valorEmpresa, mo.mediaMercado, mo.avaliacao)}
+                    ${getEvaluationHTML(recomendacao)}
+                </div>
+            `;
+        }
+
+
+        // -- Helper para prompts --
+        function buildBaseMetricsPrompt(selectedMonths, extraContext = '') {
+            const metrics = calculateMetricsForPeriod(selectedMonths);
+            const totalReceita = selectedMonths.reduce((sum, m) => sum + (metrics.receitaRow.values[m] || 0), 0);
+            const totalMC = selectedMonths.reduce((s, m) => s + metrics.mcRow.values[m], 0);
+            const totalLL = selectedMonths.reduce((s, m) => s + metrics.llRow.values[m], 0);
+            const totalCPV = selectedMonths.reduce((s, m) => s + metrics.cpvRow.values[m], 0);
+            const totalDV = selectedMonths.reduce((s, m) => s + metrics.dvRow.values[m], 0);
+            const totalDO = selectedMonths.reduce((s, m) => s + metrics.doRow.values[m], 0);
+            const margemContribuicao = totalReceita !== 0 ? totalMC / totalReceita : 0;
+            const margemOperacional = totalReceita !== 0 ? totalLL / totalReceita : 0;
+
+            const text = `
+            Dados financeiros base para o período de ${selectedMonths.join(', ')}:
+            - Receita Líquida: ${totalReceita.toFixed(2)}
+            - Custo do Produto Vendido (CPV): ${totalCPV.toFixed(2)}
+            - Despesas Variáveis: ${totalDV.toFixed(2)}
+            - Despesas Operacionais: ${totalDO.toFixed(2)}
+            - Margem de Contribuição: ${totalMC.toFixed(2)} (${(margemContribuicao).toFixed(4)})
+            - Lucro Líquido: ${totalLL.toFixed(2)} (${(margemOperacional).toFixed(4)})
+            ${extraContext ? `\n${extraContext}` : ''}
+            `.trim();
+            
+            return { prompt: text, plainText: text.replace(extraContext, '') };
+        }
+
+        handleUrlParamsOnLoad();
+    });
+    </script>
+</body>
+</html>
+
